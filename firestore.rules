@@ -1,0 +1,230 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Shared Hardened Primitives
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        request.auth.token.email == 'epusaan@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner(uid) {
+      return isVerified() && request.auth.uid == uid;
+    }
+
+    // Validation Blueprint: UserProfile
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == userId &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.role in ['admin', 'hospital_operator'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: HospitalBackupCounts
+    function isValidBackupCounts(c) {
+      return c is map &&
+        c.keys().hasAll(['patients', 'orders', 'pharmacyInvoices', 'opdVisits', 'ipdAdmissions', 'emergencyCases', 'services', 'medicines']) &&
+        c.keys().hasOnly(['patients', 'orders', 'pharmacyInvoices', 'opdVisits', 'ipdAdmissions', 'emergencyCases', 'services', 'medicines']) &&
+        c.patients is int && c.patients >= 0 &&
+        c.orders is int && c.orders >= 0 &&
+        c.pharmacyInvoices is int && c.pharmacyInvoices >= 0 &&
+        c.opdVisits is int && c.opdVisits >= 0 &&
+        c.ipdAdmissions is int && c.ipdAdmissions >= 0 &&
+        c.emergencyCases is int && c.emergencyCases >= 0 &&
+        c.services is int && c.services >= 0 &&
+        c.medicines is int && c.medicines >= 0;
+    }
+
+    // Validation Blueprint: HospitalBackup
+    function isValidHospitalBackup(data, backupId) {
+      return data.keys().hasAll(['id', 'ownerUid', 'label', 'hospitalName', 'fiscalYear', 'backupType', 'totalShards', 'counts', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerUid', 'label', 'hospitalName', 'fiscalYear', 'backupType', 'totalShards', 'counts', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == backupId &&
+        isValidId(data.ownerUid) &&
+        data.label is string && data.label.size() >= 1 && data.label.size() <= 160 &&
+        data.hospitalName is string && data.hospitalName.size() >= 1 && data.hospitalName.size() <= 160 &&
+        data.fiscalYear is string && data.fiscalYear.size() >= 1 && data.fiscalYear.size() <= 40 &&
+        data.backupType in ['MANUAL', 'AUTO_SYNC', 'PRE_RESTORE'] &&
+        data.totalShards is int && data.totalShards >= 1 && data.totalShards <= 500 &&
+        isValidBackupCounts(data.counts) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: BackupShard Payload
+    function isValidShardPayload(p) {
+      return p is map &&
+        p.keys().hasAll(['sectionKey']) &&
+        p.keys().hasOnly(['sectionKey', 'mapData', 'listData']) &&
+        p.sectionKey is string && p.sectionKey.size() >= 1 && p.sectionKey.size() <= 64 &&
+        (!('mapData' in p) || p.mapData is map) &&
+        (!('listData' in p) || (p.listData is list && p.listData.size() <= 100 && (p.listData.size() == 0 || p.listData[0] is map)));
+    }
+
+    // Validation Blueprint: BackupShard
+    function isValidBackupShard(data, backupId, shardId) {
+      return data.keys().hasAll(['id', 'backupId', 'ownerUid', 'sectionName', 'shardIndex', 'totalShards', 'payload', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'backupId', 'ownerUid', 'sectionName', 'shardIndex', 'totalShards', 'payload', 'createdAt']) &&
+        isValidId(data.id) &&
+        data.id == shardId &&
+        isValidId(data.backupId) &&
+        data.backupId == backupId &&
+        isValidId(data.ownerUid) &&
+        data.sectionName in ['core', 'patients', 'orders', 'pharmacy', 'clinical', 'finance', 'catalog'] &&
+        data.shardIndex is int && data.shardIndex >= 0 && data.shardIndex <= 500 &&
+        data.totalShards is int && data.totalShards >= 1 && data.totalShards <= 500 &&
+        isValidShardPayload(data.payload) &&
+        data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: HospitalSyncConfig
+    function isValidSyncConfig(data, syncId) {
+      return data.keys().hasAll(['id', 'ownerUid', 'hospitalName', 'autoCloudBackupEnabled', 'backupIntervalMinutes', 'lastSyncedAt', 'lastBackupId', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerUid', 'hospitalName', 'autoCloudBackupEnabled', 'backupIntervalMinutes', 'lastSyncedAt', 'lastBackupId', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == syncId &&
+        isValidId(data.ownerUid) &&
+        data.hospitalName is string && data.hospitalName.size() >= 1 && data.hospitalName.size() <= 160 &&
+        data.autoCloudBackupEnabled is bool &&
+        data.backupIntervalMinutes is int && data.backupIntervalMinutes >= 1 && data.backupIntervalMinutes <= 1440 &&
+        data.lastSyncedAt is string && data.lastSyncedAt.size() <= 64 &&
+        data.lastBackupId is string && data.lastBackupId.size() <= 128 &&
+        data.updatedAt is timestamp;
+    }
+
+    // Collection: /admins/{userId}
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if isValidId(userId) && isVerified() && request.auth.token.email == 'epusaan@gmail.com';
+    }
+
+    // Collection: /users/{userId}
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (incoming().role == 'hospital_operator' || isAdmin());
+      allow update: if isValidId(userId) &&
+        isVerified() &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'updatedAt']))
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // Collection: /backups/{backupId}
+    match /backups/{backupId} {
+      allow get: if isValidId(backupId) && isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow create: if isValidId(backupId) &&
+        isVerified() &&
+        isValidHospitalBackup(incoming(), backupId) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(backupId) &&
+        isVerified() &&
+        isValidHospitalBackup(incoming(), backupId) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (existing().ownerUid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['label', 'totalShards', 'counts', 'updatedAt']))
+        );
+      allow delete: if isValidId(backupId) && isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+
+      // Subcollection: /backups/{backupId}/shards/{shardId}
+      match /shards/{shardId} {
+        allow get: if isValidId(backupId) &&
+          isValidId(shardId) &&
+          isVerified() &&
+          (existing().ownerUid == request.auth.uid || isAdmin());
+        allow list: if isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+        allow create: if isValidId(backupId) &&
+          isValidId(shardId) &&
+          isVerified() &&
+          isValidBackupShard(incoming(), backupId, shardId) &&
+          incoming().ownerUid == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/backups/$(backupId)) &&
+          get(/databases/$(database)/documents/backups/$(backupId)).data.ownerUid == request.auth.uid;
+        allow update: if false;
+        allow delete: if isValidId(backupId) &&
+          isValidId(shardId) &&
+          isVerified() &&
+          (existing().ownerUid == request.auth.uid || isAdmin());
+      }
+    }
+
+    // Collection: /syncState/{syncId}
+    match /syncState/{syncId} {
+      allow get: if isValidId(syncId) && isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isVerified() && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow create: if isValidId(syncId) &&
+        isOwner(syncId) &&
+        isValidSyncConfig(incoming(), syncId) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(syncId) &&
+        isVerified() &&
+        isValidSyncConfig(incoming(), syncId) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (isOwner(syncId) && incoming().diff(existing()).affectedKeys().hasOnly(['hospitalName', 'autoCloudBackupEnabled', 'backupIntervalMinutes', 'lastSyncedAt', 'lastBackupId', 'updatedAt']))
+        );
+      allow delete: if isValidId(syncId) && (isOwner(syncId) || isAdmin());
+    }
+
+    // Connection Probe Doc (read-only)
+    match /test/{docId} {
+      allow get: if isValidId(docId) && docId == 'connection';
+      allow list, write: if false;
+    }
+  }
+}

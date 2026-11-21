@@ -1,0 +1,238 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated hospital operator or admin user profile linked to Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Authentication UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "hospital_operator"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "HospitalBackup": {
+      "title": "HospitalBackup",
+      "description": "Cloud backup snapshot header for Saptari Hospital ERP clinical, pharmacy, and finance data.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "hospitalName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "fiscalYear": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "backupType": {
+          "type": "string",
+          "enum": ["MANUAL", "AUTO_SYNC", "PRE_RESTORE"]
+        },
+        "totalShards": {
+          "type": "integer"
+        },
+        "counts": {
+          "type": "object",
+          "properties": {
+            "patients": { "type": "integer" },
+            "orders": { "type": "integer" },
+            "pharmacyInvoices": { "type": "integer" },
+            "opdVisits": { "type": "integer" },
+            "ipdAdmissions": { "type": "integer" },
+            "emergencyCases": { "type": "integer" },
+            "services": { "type": "integer" },
+            "medicines": { "type": "integer" }
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerUid",
+        "label",
+        "hospitalName",
+        "fiscalYear",
+        "backupType",
+        "totalShards",
+        "counts",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BackupShard": {
+      "title": "BackupShard",
+      "description": "Bounded native Map/List chunk of hospital backup records under a parent HospitalBackup document.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "backupId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sectionName": {
+          "type": "string",
+          "enum": ["core", "patients", "orders", "pharmacy", "clinical", "finance", "catalog"]
+        },
+        "shardIndex": {
+          "type": "integer"
+        },
+        "totalShards": {
+          "type": "integer"
+        },
+        "payload": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "backupId",
+        "ownerUid",
+        "sectionName",
+        "shardIndex",
+        "totalShards",
+        "payload",
+        "createdAt"
+      ]
+    },
+    "HospitalSyncConfig": {
+      "title": "HospitalSyncConfig",
+      "description": "Cloud auto-backup schedule and latest snapshot pointer per authenticated operator.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "hospitalName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "autoCloudBackupEnabled": {
+          "type": "boolean"
+        },
+        "backupIntervalMinutes": {
+          "type": "integer"
+        },
+        "lastSyncedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "lastBackupId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerUid",
+        "hospitalName",
+        "autoCloudBackupEnabled",
+        "backupIntervalMinutes",
+        "lastSyncedAt",
+        "lastBackupId",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user profiles isolated per UID or Admin."
+    },
+    "/backups/{backupId}": {
+      "schema": { "$ref": "#/entities/HospitalBackup" },
+      "description": "Hospital database backup snapshots owned by the uploading operator or accessible to Admin."
+    },
+    "/backups/{backupId}/shards/{shardId}": {
+      "schema": { "$ref": "#/entities/BackupShard" },
+      "description": "Chunked native map/list backup shards belonging to a parent backup document."
+    },
+    "/syncState/{syncId}": {
+      "schema": { "$ref": "#/entities/HospitalSyncConfig" },
+      "description": "Automated cloud backup schedule state per user."
+    }
+  }
+}

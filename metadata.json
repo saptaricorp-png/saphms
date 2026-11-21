@@ -1,0 +1,6 @@
+{
+  "name": "AegisLIMS — Clinical Laboratory & ERP",
+  "description": "Enterprise Laboratory Information Management System and ERP with TAT tracking, automated reagent inventory, collection center credit control, A4 report printing, automated email & API report dispatch, audit trail, and role-based access control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
